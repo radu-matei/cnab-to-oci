@@ -1,4 +1,4 @@
-[![Documentation](https://godoc.org/github.com/docker/cnab-to-oci/remotes?status.svg)](http://godoc.org/github.com/docker/cnab-to-oci/remotes)
+[![Documentation](https://godoc.org/github.com/radu-matei/cnab-to-oci/remotes?status.svg)](http://godoc.org/github.com/radu-matei/cnab-to-oci/remotes)
 
 # CNAB to OCI
 
@@ -10,8 +10,8 @@ OCI or Docker registry.
 To get and build the project:
 
 ```console
-$ go get -u github.com/docker/cnab-to-oci
-$ cd $GOPATH/src/github.com/docker/cnab-to-oci
+$ go get -u github.com/radu-matei/cnab-to-oci
+$ cd $GOPATH/src/github.com/radu-matei/cnab-to-oci
 $ make
 ```
 
@@ -241,7 +241,7 @@ project.
 ## Contributors
 
 See also the list of
-[contributors](https://github.com/docker/cnab-to-oci/graphs/contributors) who
+[contributors](https://github.com/radu-matei/cnab-to-oci/graphs/contributors) who
 participated in this project.
 
 ## License

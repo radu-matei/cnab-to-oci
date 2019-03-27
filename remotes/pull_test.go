@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/cnab-to-oci/converter"
-	"github.com/docker/cnab-to-oci/tests"
+	"github.com/radu-matei/cnab-to-oci/converter"
+	"github.com/radu-matei/cnab-to-oci/tests"
 	"github.com/docker/distribution/reference"
 	ocischemav1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"gotest.tools/assert"

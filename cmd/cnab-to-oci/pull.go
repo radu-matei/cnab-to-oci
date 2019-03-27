@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/docker/cnab-to-oci/remotes"
+	"github.com/radu-matei/cnab-to-oci/remotes"
 	"github.com/docker/distribution/reference"
 	"github.com/spf13/cobra"
 )

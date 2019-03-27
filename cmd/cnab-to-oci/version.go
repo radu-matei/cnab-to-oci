@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/docker/cnab-to-oci/internal"
+	"github.com/radu-matei/cnab-to-oci/internal"
 	"github.com/spf13/cobra"
 )
 

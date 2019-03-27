@@ -8,9 +8,9 @@ import (
 
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/remotes"
-	"github.com/deislabs/duffle/pkg/bundle"
+	"github.com/radu-matei/cnab-go/pkg/bundle"
 	"github.com/docker/cli/opts"
-	"github.com/docker/cnab-to-oci/converter"
+	"github.com/radu-matei/cnab-to-oci/converter"
 	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/client/auth"

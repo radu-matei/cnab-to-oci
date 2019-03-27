@@ -28,7 +28,7 @@ RUN curl -Ls https://download.docker.com/linux/static/$DOCKERCLI_CHANNEL/x86_64/
 RUN curl -Ls https://github.com/docker/app/releases/download/$DOCKER_APP_VERSION/docker-app-linux.tar.gz | tar -xz
 RUN git clone https://github.com/docker/app
 
-WORKDIR /go/src/github.com/docker/cnab-to-oci
+WORKDIR /go/src/github.com/radu-matei/cnab-to-oci
 COPY . .
 RUN make BUILDTIME=$BUILDTIME COMMIT=$COMMIT TAG=$TAG bin/cnab-to-oci &&\
     make BUILDTIME=$BUILDTIME COMMIT=$COMMIT TAG=$TAG build-e2e-test
@@ -40,9 +40,9 @@ FROM alpine:${ALPINE_VERSION} as e2e
 COPY --from=build /go/docker/docker /usr/bin/docker
 COPY --from=build /go/docker-app-linux /usr/bin/docker-app
 COPY --from=build /go/app/examples /examples
-COPY --from=build /go/src/github.com/docker/cnab-to-oci/bin/cnab-to-oci /usr/bin/cnab-to-oci
-COPY --from=build /go/src/github.com/docker/cnab-to-oci/e2e /e2e
-COPY --from=build /go/src/github.com/docker/cnab-to-oci/e2e.test /e2e/e2e.test
+COPY --from=build /go/src/github.com/radu-matei/cnab-to-oci/bin/cnab-to-oci /usr/bin/cnab-to-oci
+COPY --from=build /go/src/github.com/radu-matei/cnab-to-oci/e2e /e2e
+COPY --from=build /go/src/github.com/radu-matei/cnab-to-oci/e2e.test /e2e/e2e.test
 
 # Run end-to-end tests
 CMD ["e2e/run.sh"]

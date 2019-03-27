@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"github.com/deislabs/duffle/pkg/bundle"
+	"github.com/radu-matei/cnab-go/pkg/bundle"
 	"github.com/docker/distribution/manifest/schema2"
 	ocischema "github.com/opencontainers/image-spec/specs-go"
 	ocischemav1 "github.com/opencontainers/image-spec/specs-go/v1"

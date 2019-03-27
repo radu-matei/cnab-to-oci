@@ -7,9 +7,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/deislabs/duffle/pkg/bundle"
+	"github.com/radu-matei/cnab-go/pkg/bundle"
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/cnab-to-oci/remotes"
+	"github.com/radu-matei/cnab-to-oci/remotes"
 	"github.com/docker/distribution/reference"
 	"github.com/spf13/cobra"
 )
