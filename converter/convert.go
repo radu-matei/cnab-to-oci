@@ -60,12 +60,13 @@ func GetBundleConfigManifestDescriptor(ix *ocischemav1.Index) (ocischemav1.Descr
 }
 
 // ConvertBundleToOCIIndex converts a CNAB bundle into an OCI Index representation
-func ConvertBundleToOCIIndex(b *bundle.Bundle, targetRef reference.Named, bundleConfigManifestRef ocischemav1.Descriptor) (*ocischemav1.Index, error) {
+func ConvertBundleToOCIIndex(b *bundle.Bundle, targetRef reference.Named,
+	bundleConfigManifestRef ocischemav1.Descriptor, relocationMap bundle.ImageRelocationMap) (*ocischemav1.Index, error) {
 	annotations, err := makeAnnotations(b)
 	if err != nil {
 		return nil, err
 	}
-	manifests, err := makeManifests(b, targetRef, bundleConfigManifestRef)
+	manifests, err := makeManifests(b, targetRef, bundleConfigManifestRef, relocationMap)
 	if err != nil {
 		return nil, err
 	}
@@ -79,23 +80,64 @@ func ConvertBundleToOCIIndex(b *bundle.Bundle, targetRef reference.Named, bundle
 	return &result, nil
 }
 
-// ConvertOCIIndexToBundle converts an OCI index to a CNAB bundle representation
-func ConvertOCIIndexToBundle(ix *ocischemav1.Index, config *BundleConfig, originRepo reference.Named) (*bundle.Bundle, error) {
-	b := &bundle.Bundle{
-		SchemaVersion: CNABVersion,
-		Actions:       config.Actions,
-		Credentials:   config.Credentials,
-		Definitions:   config.Definitions,
-		Parameters:    config.Parameters,
-		Custom:        config.Custom,
+// GenerateRelocationMap TODO
+func GenerateRelocationMap(ix *ocischemav1.Index, b *bundle.Bundle, originRepo reference.Named) (bundle.ImageRelocationMap, error) {
+	relocationMap := bundle.ImageRelocationMap{}
+
+	for _, d := range ix.Manifests {
+		switch d.MediaType {
+		case ocischemav1.MediaTypeImageManifest, ocischemav1.MediaTypeImageIndex:
+		case images.MediaTypeDockerSchema2Manifest, images.MediaTypeDockerSchema2ManifestList:
+		default:
+			return nil, fmt.Errorf("unsupported manifest descriptor %q with mediatype %q", d.Digest, d.MediaType)
+		}
+		descriptorType, ok := d.Annotations[CNABDescriptorTypeAnnotation]
+		if !ok {
+			return nil, fmt.Errorf("manifest descriptor %q has no CNAB descriptor type annotation %q", d.Digest, CNABDescriptorTypeAnnotation)
+		}
+		if descriptorType == CNABDescriptorTypeConfig {
+			continue
+		}
+		// strip tag/digest from originRepo
+		originRepo, err := reference.ParseNormalizedNamed(originRepo.Name())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create a digested reference for manifest descriptor %q: %s", d.Digest, err)
+		}
+		ref, err := reference.WithDigest(originRepo, d.Digest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create a digested reference for manifest descriptor %q: %s", d.Digest, err)
+		}
+		refFamiliar := reference.FamiliarString(ref)
+		switch descriptorType {
+		// The current descriptor is an invocation image
+		case CNABDescriptorTypeInvocation:
+			if len(b.InvocationImages) == 0 {
+				return nil, fmt.Errorf("unknown invocation image: %q", d.Digest)
+			}
+			relocationMap[b.InvocationImages[0].Image] = refFamiliar
+
+		// The current descriptor is a component image
+		case CNABDescriptorTypeComponent:
+			componentName, ok := d.Annotations[CNABDescriptorComponentNameAnnotation]
+			if !ok {
+				return nil, fmt.Errorf("component name missing in descriptor %q", d.Digest)
+			}
+			c, ok := b.Images[componentName]
+			if !ok {
+				return nil, fmt.Errorf("component %q not found in bundle", componentName)
+			}
+			relocationMap[c.Image] = refFamiliar
+		default:
+			return nil, fmt.Errorf("invalid CNAB descriptor type %q in descriptor %q", descriptorType, d.Digest)
+		}
 	}
-	if err := parseTopLevelAnnotations(ix.Annotations, b); err != nil {
-		return nil, err
-	}
-	if err := parseManifests(ix.Manifests, b, originRepo); err != nil {
-		return nil, err
-	}
-	return b, nil
+
+	return relocationMap, nil
+}
+
+func CheckAnnotations(ix *ocischemav1.Index, b *bundle.Bundle) bool {
+	// TODO
+	return true
 }
 
 func makeAnnotations(b *bundle.Bundle) (map[string]string, error) {
@@ -145,7 +187,8 @@ func parseTopLevelAnnotations(annotations map[string]string, into *bundle.Bundle
 	return nil
 }
 
-func makeManifests(b *bundle.Bundle, targetReference reference.Named, bundleConfigManifestReference ocischemav1.Descriptor) ([]ocischemav1.Descriptor, error) {
+func makeManifests(b *bundle.Bundle, targetReference reference.Named,
+	bundleConfigManifestReference ocischemav1.Descriptor, relocationMap bundle.ImageRelocationMap) ([]ocischemav1.Descriptor, error) {
 	if len(b.InvocationImages) != 1 {
 		return nil, errors.New("only one invocation image supported")
 	}
@@ -154,7 +197,7 @@ func makeManifests(b *bundle.Bundle, targetReference reference.Named, bundleConf
 	}
 	bundleConfigManifestReference.Annotations[CNABDescriptorTypeAnnotation] = CNABDescriptorTypeConfig
 	manifests := []ocischemav1.Descriptor{bundleConfigManifestReference}
-	invocationImage, err := makeDescriptor(b.InvocationImages[0].BaseImage, targetReference)
+	invocationImage, err := makeDescriptor(b.InvocationImages[0].BaseImage, targetReference, relocationMap)
 	if err != nil {
 		return nil, fmt.Errorf("invalid invocation image: %s", err)
 	}
@@ -165,7 +208,7 @@ func makeManifests(b *bundle.Bundle, targetReference reference.Named, bundleConf
 	images := makeSortedImages(b.Images)
 	for _, name := range images {
 		img := b.Images[name]
-		image, err := makeDescriptor(img.BaseImage, targetReference)
+		image, err := makeDescriptor(img.BaseImage, targetReference, relocationMap)
 		if err != nil {
 			return nil, fmt.Errorf("invalid image: %s", err)
 		}
@@ -187,80 +230,22 @@ func makeSortedImages(images map[string]bundle.Image) []string {
 	return result
 }
 
-func parseManifests(descriptors []ocischemav1.Descriptor, into *bundle.Bundle, originRepo reference.Named) error {
-	for _, d := range descriptors {
-		var imageType string
-		switch d.MediaType {
-		case ocischemav1.MediaTypeImageManifest, ocischemav1.MediaTypeImageIndex:
-			imageType = "oci"
-		case images.MediaTypeDockerSchema2Manifest, images.MediaTypeDockerSchema2ManifestList:
-			imageType = "docker"
-		default:
-			return fmt.Errorf("unsupported manifest descriptor %q with mediatype %q", d.Digest, d.MediaType)
-		}
-		descriptorType, ok := d.Annotations[CNABDescriptorTypeAnnotation]
-		if !ok {
-			return fmt.Errorf("manifest descriptor %q has no CNAB descriptor type annotation %q", d.Digest, CNABDescriptorTypeAnnotation)
-		}
-		if descriptorType == CNABDescriptorTypeConfig {
-			continue
-		}
-		// strip tag/digest from originRepo
-		originRepo, err := reference.ParseNormalizedNamed(originRepo.Name())
-		if err != nil {
-			return fmt.Errorf("failed to create a digested reference for manifest descriptor %q: %s", d.Digest, err)
-		}
-		ref, err := reference.WithDigest(originRepo, d.Digest)
-		if err != nil {
-			return fmt.Errorf("failed to create a digested reference for manifest descriptor %q: %s", d.Digest, err)
-		}
-		refFamiliar := reference.FamiliarString(ref)
-		switch descriptorType {
-		// The current descriptor is an invocation image
-		case CNABDescriptorTypeInvocation:
-			into.InvocationImages = append(into.InvocationImages, bundle.InvocationImage{
-				BaseImage: bundle.BaseImage{
-					Image:     refFamiliar,
-					ImageType: imageType,
-					MediaType: d.MediaType,
-					Size:      uint64(d.Size),
-				},
-			})
-		// The current descriptor is a component image
-		case CNABDescriptorTypeComponent:
-			componentName, ok := d.Annotations[CNABDescriptorComponentNameAnnotation]
-			if !ok {
-				return fmt.Errorf("component name missing in descriptor %q", d.Digest)
-			}
-			if into.Images == nil {
-				into.Images = make(map[string]bundle.Image)
-			}
-			into.Images[componentName] = bundle.Image{
-				BaseImage: bundle.BaseImage{
-					Image:     refFamiliar,
-					ImageType: imageType,
-					MediaType: d.MediaType,
-					Size:      uint64(d.Size),
-				},
-			}
-		default:
-			return fmt.Errorf("invalid CNAB descriptor type %q in descriptor %q", descriptorType, d.Digest)
-		}
+func makeDescriptor(baseImage bundle.BaseImage, targetReference reference.Named, relocationMap bundle.ImageRelocationMap) (ocischemav1.Descriptor, error) {
+	relocatedImage, ok := relocationMap[baseImage.Image]
+	if !ok {
+		return ocischemav1.Descriptor{}, fmt.Errorf("unknown invocation image %q in the relocation map", baseImage.Image)
 	}
-	return nil
-}
 
-func makeDescriptor(baseImage bundle.BaseImage, targetReference reference.Named) (ocischemav1.Descriptor, error) {
-	named, err := reference.ParseNormalizedNamed(baseImage.Image)
+	named, err := reference.ParseNormalizedNamed(relocatedImage)
 	if err != nil {
-		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not a valid image reference: %s", baseImage.Image, err)
+		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not a valid image reference: %s", relocatedImage, err)
 	}
 	if named.Name() != targetReference.Name() {
-		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not in the same repository as %q", baseImage.Image, targetReference.String())
+		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not in the same repository as %q", relocatedImage, targetReference.String())
 	}
 	digested, ok := named.(reference.Digested)
 	if !ok {
-		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not a digested reference", baseImage.Image)
+		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not a digested reference", relocatedImage)
 	}
 	switch baseImage.MediaType {
 	case ocischemav1.MediaTypeImageManifest:
@@ -268,7 +253,7 @@ func makeDescriptor(baseImage bundle.BaseImage, targetReference reference.Named)
 	case ocischemav1.MediaTypeImageIndex:
 	case images.MediaTypeDockerSchema2ManifestList:
 	default:
-		return ocischemav1.Descriptor{}, fmt.Errorf("unsupported media type %q for image %q", baseImage.MediaType, baseImage.Image)
+		return ocischemav1.Descriptor{}, fmt.Errorf("unsupported media type %q for image %q", baseImage.MediaType, relocatedImage)
 	}
 	return ocischemav1.Descriptor{
 		Digest:    digested.Digest(),

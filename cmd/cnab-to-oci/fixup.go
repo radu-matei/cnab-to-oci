@@ -53,7 +53,10 @@ func runFixup(opts fixupOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := remotes.FixupBundle(context.Background(), &b, ref, createResolver(opts.insecureRegistries), remotes.WithEventCallback(displayEvent)); err != nil {
+	// TODO: store or print the relocation map
+	relocationMap, err := remotes.FixupBundle(context.Background(), &b, ref, createResolver(opts.insecureRegistries), remotes.WithEventCallback(displayEvent))
+	fmt.Println("Relocation map:", relocationMap)
+	if err != nil {
 		return err
 	}
 	bundleJSON, err = json.MarshalIndent(b, "", "\t")

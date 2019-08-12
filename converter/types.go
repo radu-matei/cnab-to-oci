@@ -3,8 +3,6 @@ package converter
 import (
 	"encoding/json"
 
-	"github.com/deislabs/cnab-go/bundle/definition"
-
 	"github.com/deislabs/cnab-go/bundle"
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/schema2"
@@ -18,16 +16,6 @@ const (
 	CNABConfigMediaType = "application/vnd.cnab.config.v1+json"
 )
 
-// BundleConfig describes a cnab bundle runtime config
-type BundleConfig struct {
-	SchemaVersion string                       `json:"schemaVersion" mapstructure:"schemaVersion"`
-	Actions       map[string]bundle.Action     `json:"actions,omitempty" mapstructure:"actions,omitempty"`
-	Definitions   definition.Definitions       `json:"definitions" mapstructure:"definitions"`
-	Parameters    *bundle.ParametersDefinition `json:"parameters" mapstructure:"parameters"`
-	Credentials   map[string]bundle.Credential `json:"credentials" mapstructure:"credentials"`
-	Custom        map[string]interface{}       `json:"custom,omitempty" mapstructure:"custom"`
-}
-
 // PreparedBundleConfig contains the config blob, image manifest (and fallback), and descriptors for a CNAB config
 type PreparedBundleConfig struct {
 	ConfigBlob           []byte
@@ -37,21 +25,9 @@ type PreparedBundleConfig struct {
 	Fallback             *PreparedBundleConfig
 }
 
-// CreateBundleConfig creates a bundle config from a CNAB
-func CreateBundleConfig(b *bundle.Bundle) *BundleConfig {
-	return &BundleConfig{
-		SchemaVersion: CNABVersion,
-		Actions:       b.Actions,
-		Definitions:   b.Definitions,
-		Parameters:    b.Parameters,
-		Credentials:   b.Credentials,
-		Custom:        b.Custom,
-	}
-}
-
 // PrepareForPush serializes a bundle config, generates its image manifest, and its manifest descriptor
-func (c *BundleConfig) PrepareForPush() (*PreparedBundleConfig, error) {
-	blob, err := json.Marshal(c)
+func PrepareForPush(b *bundle.Bundle) (*PreparedBundleConfig, error) {
+	blob, err := json.Marshal(b)
 	if err != nil {
 		return nil, err
 	}

@@ -17,14 +17,14 @@ import (
 
 // FixupBundle checks that all the references are present in the referenced repository, otherwise it will mount all
 // the manifests to that repository. The bundle is then patched with the new digested references.
-func FixupBundle(ctx context.Context, b *bundle.Bundle, ref reference.Named, resolver remotes.Resolver, opts ...FixupOption) error {
+func FixupBundle(ctx context.Context, b *bundle.Bundle, ref reference.Named, resolver remotes.Resolver, opts ...FixupOption) (bundle.ImageRelocationMap, error) {
 	logger := log.G(ctx)
 	logger.Debugf("Fixing up bundle %s", ref)
 
 	// Configure the fixup and the even loop
 	cfg, err := newFixupConfig(b, ref, resolver, opts...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	events := make(chan FixupEvent)
@@ -43,37 +43,38 @@ func FixupBundle(ctx context.Context, b *bundle.Bundle, ref reference.Named, res
 
 	// Fixup invocation images
 	if len(b.InvocationImages) != 1 {
-		return fmt.Errorf("only one invocation image supported for bundle %q", ref)
+		return nil, fmt.Errorf("only one invocation image supported for bundle %q", ref)
 	}
-	if b.InvocationImages[0].BaseImage, err = fixupImage(ctx, b.InvocationImages[0].BaseImage, cfg, events, cfg.invocationImagePlatformFilter); err != nil {
-		return err
+
+	relocationMap := bundle.ImageRelocationMap{}
+	if err := fixupImage(ctx, b.InvocationImages[0].BaseImage, relocationMap, cfg, events, cfg.invocationImagePlatformFilter); err != nil {
+		return nil, err
 	}
 	// Fixup images
-	for name, original := range b.Images {
-		if original.BaseImage, err = fixupImage(ctx, original.BaseImage, cfg, events, cfg.componentImagePlatformFilter); err != nil {
-			return err
+	for _, original := range b.Images {
+		if err := fixupImage(ctx, original.BaseImage, relocationMap, cfg, events, cfg.componentImagePlatformFilter); err != nil {
+			return nil, err
 		}
-		b.Images[name] = original
 	}
 
 	logger.Debug("Bundle fixed")
-	return nil
+	return relocationMap, nil
 }
 
-func fixupImage(ctx context.Context, baseImage bundle.BaseImage, cfg fixupConfig, events chan<- FixupEvent, platformFilter platforms.Matcher) (bundle.BaseImage, error) {
-	log.G(ctx).Debugf("Fixing image %s", baseImage.Image)
+func fixupImage(ctx context.Context, baseImage bundle.BaseImage, relocationMap bundle.ImageRelocationMap, cfg fixupConfig, events chan<- FixupEvent, platformFilter platforms.Matcher) error {
+	log.G(ctx).Debugf("Updating entry in relocation map for %q", baseImage.Image)
 	ctx = withMutedContext(ctx)
 	notifyEvent, progress := makeEventNotifier(events, baseImage.Image, cfg.targetRef)
 
 	notifyEvent(FixupEventTypeCopyImageStart, "", nil)
 	// Fixup Base image
-	fixupInfo, err := fixupBaseImage(ctx, &baseImage, cfg.targetRef, cfg.resolver)
+	fixupInfo, err := fixupBaseImage(ctx, baseImage, cfg.targetRef, cfg.resolver)
 	if err != nil {
 		return notifyError(notifyEvent, err)
 	}
 	if fixupInfo.sourceRef.Name() == fixupInfo.targetRepo.Name() {
 		notifyEvent(FixupEventTypeCopyImageEnd, "Nothing to do: image reference is already present in repository"+fixupInfo.targetRepo.String(), nil)
-		return baseImage, nil
+		return nil
 	}
 
 	sourceFetcher, err := makeSourceFetcher(ctx, cfg.resolver, fixupInfo.sourceRef.Name())
@@ -82,7 +83,7 @@ func fixupImage(ctx context.Context, baseImage bundle.BaseImage, cfg fixupConfig
 	}
 
 	// Fixup platforms
-	if err := fixupPlatforms(ctx, &baseImage, &fixupInfo, sourceFetcher, platformFilter); err != nil {
+	if err := fixupPlatforms(ctx, baseImage, relocationMap, &fixupInfo, sourceFetcher, platformFilter); err != nil {
 		return notifyError(notifyEvent, err)
 	}
 
@@ -97,10 +98,10 @@ func fixupImage(ctx context.Context, baseImage bundle.BaseImage, cfg fixupConfig
 	}
 
 	notifyEvent(FixupEventTypeCopyImageEnd, "", nil)
-	return baseImage, nil
+	return nil
 }
 
-func fixupPlatforms(ctx context.Context, baseImage *bundle.BaseImage, fixupInfo *imageFixupInfo, sourceFetcher sourceFetcherAdder, filter platforms.Matcher) error {
+func fixupPlatforms(ctx context.Context, baseImage bundle.BaseImage, relocationMap bundle.ImageRelocationMap, fixupInfo *imageFixupInfo, sourceFetcher sourceFetcherAdder, filter platforms.Matcher) error {
 	if filter == nil ||
 		(fixupInfo.resolvedDescriptor.MediaType != ocischemav1.MediaTypeImageIndex && fixupInfo.resolvedDescriptor.MediaType != images.MediaTypeDockerSchema2ManifestList) {
 		// no platform filter if platform is empty, or if the descriptor is not an OCI Index / Docker Manifest list
@@ -144,12 +145,13 @@ func fixupPlatforms(ctx context.Context, baseImage *bundle.BaseImage, fixupInfo 
 	if err != nil {
 		return err
 	}
-	baseImage.Image = newRef.String()
+	// Update the relocation map with the original image name and the digested reference of the image pushed inside the bundle repository
+	relocationMap[baseImage.Image] = newRef.String()
 	return nil
 }
 
 func fixupBaseImage(ctx context.Context,
-	baseImage *bundle.BaseImage,
+	baseImage bundle.BaseImage,
 	targetRef reference.Named, //nolint: interfacer
 	resolver remotes.Resolver) (imageFixupInfo, error) {
 
@@ -172,13 +174,6 @@ func fixupBaseImage(ctx context.Context,
 	if err != nil {
 		return imageFixupInfo{}, fmt.Errorf("failed to resolve %q, push the image to the registry before pushing the bundle: %s", sourceImageRef, err)
 	}
-	digested, err := reference.WithDigest(targetRepoOnly, descriptor.Digest)
-	if err != nil {
-		return imageFixupInfo{}, err
-	}
-	baseImage.Image = reference.FamiliarString(digested)
-	baseImage.MediaType = descriptor.MediaType
-	baseImage.Size = uint64(descriptor.Size)
 	return imageFixupInfo{
 		resolvedDescriptor: descriptor,
 		sourceRef:          sourceImageRef,

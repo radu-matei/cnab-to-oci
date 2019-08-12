@@ -60,13 +60,13 @@ func runPush(opts pushOptions) error {
 		return err
 	}
 
-	err = remotes.FixupBundle(context.Background(), &b, ref, resolver, remotes.WithEventCallback(displayEvent),
+	relocationMap, err := remotes.FixupBundle(context.Background(), &b, ref, resolver, remotes.WithEventCallback(displayEvent),
 		remotes.WithInvocationImagePlatforms(opts.invocationPlatforms),
 		remotes.WithComponentImagePlatforms(opts.componentPlatforms))
 	if err != nil {
 		return err
 	}
-	d, err := remotes.Push(context.Background(), &b, ref, resolver, opts.allowFallbacks)
+	d, err := remotes.Push(context.Background(), &b, relocationMap, ref, resolver, opts.allowFallbacks)
 	if err != nil {
 		return err
 	}

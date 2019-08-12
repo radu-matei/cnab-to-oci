@@ -7,7 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/cnab-to-oci/converter"
 	"github.com/docker/cnab-to-oci/tests"
 	"github.com/docker/distribution/reference"
 	ocischemav1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -30,8 +29,8 @@ func TestPull(t *testing.T) {
    "layers": null
 }`)
 
-	config := converter.CreateBundleConfig(tests.MakeTestBundle())
-	bufBundleConfig, err := json.Marshal(config)
+	b := tests.MakeTestBundle()
+	bufBundle, err := json.Marshal(b)
 	assert.NilError(t, err)
 
 	fetcher := &mockFetcher{indexBuffers: []*bytes.Buffer{
@@ -40,7 +39,7 @@ func TestPull(t *testing.T) {
 		// Bundle config manifest
 		bytes.NewBuffer(bundleConfigManifestDescriptor),
 		// Bundle config
-		bytes.NewBuffer(bufBundleConfig),
+		bytes.NewBuffer(bufBundle),
 	}}
 	resolver := &mockResolver{
 		fetcher: fetcher,
@@ -60,7 +59,7 @@ func TestPull(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Pull the CNAB and get the bundle
-	b, err := Pull(context.Background(), ref, resolver)
+	b, _, err = Pull(context.Background(), ref, resolver)
 	assert.NilError(t, err)
 	expectedBundle := tests.MakeTestBundle()
 	assert.DeepEqual(t, expectedBundle, b)
@@ -76,7 +75,7 @@ func ExamplePull() {
 	}
 
 	// Pull the CNAB and get the bundle
-	resultBundle, err := Pull(context.Background(), ref, resolver)
+	resultBundle, _, err := Pull(context.Background(), ref, resolver)
 	if err != nil {
 		panic(err)
 	}
