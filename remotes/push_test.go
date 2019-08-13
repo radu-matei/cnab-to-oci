@@ -16,64 +16,20 @@ import (
 )
 
 const (
-	expectedBundleConfig = `{
-  "schemaVersion": "v1.0.0-WD",
-  "actions": {
-    "action-1": {
-      "modifies": true
-    }
-  },
-  "definitions": {
-    "param1Type": {
-     "default": "hello",
-      "enum": [
-          "value1",
-          true,
-          1
-      ],
-      "type": [
-          "string",
-          "boolean",
-          "number"
-      ]
-    }
-  },
-  "parameters": {
-    "fields": {
-      "param1": {
-        "definition": "param1Type",
-        "destination": {
-          "path": "/some/path",
-          "env": "env_var"
-        }
-      }
-    }
-  },
-  "credentials": {
-    "cred-1": {
-      "path": "/some/path",
-      "env": "env-var"
-    }
-  },
-  "custom": {
-    "my-key": "my-value"
-  }
-}`
-
 	expectedBundleManifest = `{
   "schemaVersion": 2,
   "manifests": [
     {
       "mediaType":"application/vnd.oci.image.manifest.v1+json",
-      "digest":"sha256:0addd3e524bf3c92dfa6328f1158fd4a6143214ce64b00802972f1d3ee165dbe",
-      "size":188,
+      "digest":"sha256:c2d924f51be1192113cf24beb537bda557270deef9c104204e89afcee685b160",
+      "size":189,
       "annotations":{
         "io.cnab.manifest.type":"config"
       }
     },
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:d59a1aa7866258751a261bae525a1842c7ff0662d4f34a355d5f36826abc0341",
+      "digest": "sha256:d59a1aa7866258751a261bae525a1842c7ff0662d4f34a355d5f36826abc0343",
       "size": 506,
       "annotations": {
         "io.cnab.manifest.type": "invocation"
@@ -81,7 +37,7 @@ const (
     },
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:d59a1aa7866258751a261bae525a1842c7ff0662d4f34a355d5f36826abc0341",
+      "digest": "sha256:d59a1aa7866258751a261bae525a1842c7ff0662d4f34a355d5f36826abc0342",
       "size": 507,
       "annotations": {
         "io.cnab.component.name": "another-image",
@@ -114,11 +70,13 @@ func TestPush(t *testing.T) {
 	pusher := &mockPusher{}
 	resolver := &mockResolver{pusher: pusher}
 	b := tests.MakeTestBundle()
+	expectedBundleConfig, err := json.Marshal(b)
+	assert.NilError(t, err)
 	ref, err := reference.ParseNamed("my.registry/namespace/my-app:my-tag")
 	assert.NilError(t, err)
 
 	// push the bundle
-	_, err = Push(context.Background(), b, bundle.ImageRelocationMap{}, ref, resolver, true)
+	_, err = Push(context.Background(), b, tests.MakeRelocationMap(), ref, resolver, true)
 	assert.NilError(t, err)
 	assert.Equal(t, len(resolver.pushedReferences), 3)
 	assert.Equal(t, len(pusher.pushedDescriptors), 3)
@@ -127,7 +85,7 @@ func TestPush(t *testing.T) {
 	// check pushed config
 	assert.Equal(t, "my.registry/namespace/my-app", resolver.pushedReferences[0])
 	assert.Equal(t, converter.CNABConfigMediaType, pusher.pushedDescriptors[0].MediaType)
-	assert.Equal(t, oneLiner(expectedBundleConfig), pusher.buffers[0].String())
+	assert.Equal(t, oneLiner(string(expectedBundleConfig)), pusher.buffers[0].String())
 
 	// check pushed config manifest
 	assert.Equal(t, "my.registry/namespace/my-app", resolver.pushedReferences[1])
@@ -152,7 +110,7 @@ func ExamplePush() {
 	}
 
 	// Push the bundle here
-	descriptor, err := Push(context.Background(), b, bundle.ImageRelocationMap{}, ref, resolver, true)
+	descriptor, err := Push(context.Background(), b, tests.MakeRelocationMap(), ref, resolver, true)
 	if err != nil {
 		panic(err)
 	}
@@ -167,7 +125,7 @@ func ExamplePush() {
 	// Output:
 	// {
 	//   "mediaType": "application/vnd.oci.image.index.v1+json",
-	//   "digest": "sha256:b4ec5b6008592c0badea020ac7402797f13120fc11d7fe6c0f91b77a439d9d4c",
+	//   "digest": "sha256:8e566d3ddbd45aea5c080b8566dcf341f16179ce84eaaf77066c94541e9fbd49",
 	//   "size": 1363
 	// }
 }

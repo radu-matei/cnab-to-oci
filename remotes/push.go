@@ -161,7 +161,6 @@ func prepareIndexNonOCI(b *bundle.Bundle, relocationMap bundle.ImageRelocationMa
 
 func pushPayload(ctx context.Context, resolver remotes.Resolver, reference string, descriptor ocischemav1.Descriptor, payload []byte) error {
 	ctx = withMutedContext(ctx)
-	fmt.Println("PUSHING PAYLOAD", descriptor.Size, descriptor.Digest, string(payload))
 	pusher, err := resolver.Pusher(ctx, reference)
 	if err != nil {
 		return err

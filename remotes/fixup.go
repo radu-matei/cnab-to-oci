@@ -114,7 +114,6 @@ func fixupPlatforms(ctx context.Context, baseImage bundle.BaseImage, relocationM
 	if filter == nil ||
 		(fixupInfo.resolvedDescriptor.MediaType != ocischemav1.MediaTypeImageIndex && fixupInfo.resolvedDescriptor.MediaType != images.MediaTypeDockerSchema2ManifestList) {
 		// no platform filter if platform is empty, or if the descriptor is not an OCI Index / Docker Manifest list
-		fmt.Printf("returning because filter: %#v \nfixupinfo %#v\n", filter, fixupInfo)
 		return nil
 	}
 
