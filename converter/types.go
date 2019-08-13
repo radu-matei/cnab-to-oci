@@ -2,6 +2,7 @@ package converter
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/deislabs/cnab-go/bundle"
 	"github.com/docker/distribution"
@@ -95,6 +96,7 @@ func prepareNonOCIBundleConfig(blob []byte) (*PreparedBundleConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Bundle BLOB", string(blob))
 	manBytes, err := man.MarshalJSON()
 	if err != nil {
 		return nil, err

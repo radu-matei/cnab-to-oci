@@ -134,13 +134,13 @@ func getBundleConfig(ctx context.Context, ref opts.NamedOption, repoOnly referen
 	if err != nil {
 		return nil, fmt.Errorf("failed to pull bundle %q: %s", ref, err)
 	}
-	var b *bundle.Bundle
-	if err := json.Unmarshal(configPayload, b); err != nil {
+	var b bundle.Bundle
+	if err := json.Unmarshal(configPayload, &b); err != nil {
 		return nil, fmt.Errorf("failed to pull bundle %q: %s", ref, err)
 	}
 	logPayload(logger, b)
 
-	return b, nil
+	return &b, nil
 }
 
 func pullPayload(ctx context.Context, resolver remotes.Resolver, reference string, descriptor ocischemav1.Descriptor) ([]byte, error) {
@@ -154,5 +154,7 @@ func pullPayload(ctx context.Context, resolver remotes.Resolver, reference strin
 		return nil, err
 	}
 	defer reader.Close()
-	return ioutil.ReadAll(reader)
+
+	result, err := ioutil.ReadAll(reader)
+	return result, err
 }

@@ -52,7 +52,7 @@ func TestFixupPlatformShortPaths(t *testing.T) {
 			if c.platform != "" {
 				filter = platforms.NewMatcher(platforms.MustParse(c.platform))
 			}
-			assert.NilError(t, fixupPlatforms(context.Background(), &bundle.BaseImage{}, &imageFixupInfo{
+			assert.NilError(t, fixupPlatforms(context.Background(), bundle.BaseImage{}, bundle.ImageRelocationMap{}, &imageFixupInfo{
 				resolvedDescriptor: ocischemav1.Descriptor{
 					MediaType: c.mediaType,
 				},
@@ -106,7 +106,7 @@ func TestFixupPlatforms(t *testing.T) {
 			assert.NilError(t, err)
 			sourceRef, err := reference.WithDigest(sourceRepo, sourceDigest)
 			assert.NilError(t, err)
-			bi := &bundle.BaseImage{
+			bi := bundle.BaseImage{
 				Image: sourceRef.String(),
 			}
 			fixupInfo := &imageFixupInfo{
@@ -123,7 +123,7 @@ func TestFixupPlatforms(t *testing.T) {
 			sourceFetcher := newSourceFetcherWithLocalData(bytesFetcher(sourceBytes))
 
 			// fixup
-			err = fixupPlatforms(context.Background(), bi, fixupInfo, sourceFetcher, filter)
+			err = fixupPlatforms(context.Background(), bi, bundle.ImageRelocationMap{}, fixupInfo, sourceFetcher, filter)
 			if c.expectedError != "" {
 				assert.ErrorContains(t, err, c.expectedError)
 				return
@@ -131,7 +131,7 @@ func TestFixupPlatforms(t *testing.T) {
 			assert.NilError(t, err)
 
 			// baseImage.Image should have changed
-			assert.Check(t, bi.Image != sourceRef.String())
+			// assert.Check(t, bi.Image != sourceRef.String())
 			// resolved digest should have changed
 			assert.Check(t, fixupInfo.resolvedDescriptor.Digest != sourceDigest)
 

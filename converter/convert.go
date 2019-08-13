@@ -247,17 +247,37 @@ func makeDescriptor(baseImage bundle.BaseImage, targetReference reference.Named,
 	if !ok {
 		return ocischemav1.Descriptor{}, fmt.Errorf("image %q is not a digested reference", relocatedImage)
 	}
-	switch baseImage.MediaType {
+	mediaType, err := getMediaType(baseImage, relocatedImage)
+	if err != nil {
+		return ocischemav1.Descriptor{}, err
+	}
+
+	return ocischemav1.Descriptor{
+		Digest:    digested.Digest(),
+		MediaType: mediaType,
+		Size:      int64(baseImage.Size), // TODO: mutate the bundle if the size is not set
+	}, nil
+}
+
+func getMediaType(baseImage bundle.BaseImage, relocatedImage string) (string, error) {
+	mediaType := baseImage.MediaType
+	if mediaType == "" {
+		switch baseImage.ImageType {
+		case "docker":
+			mediaType = images.MediaTypeDockerSchema2Manifest
+		case "oci":
+			mediaType = ocischemav1.MediaTypeImageManifest
+		default:
+			return "", fmt.Errorf("unsupported image type %q for image %q", baseImage.ImageType, relocatedImage)
+		}
+	}
+	switch mediaType {
 	case ocischemav1.MediaTypeImageManifest:
 	case images.MediaTypeDockerSchema2Manifest:
 	case ocischemav1.MediaTypeImageIndex:
 	case images.MediaTypeDockerSchema2ManifestList:
 	default:
-		return ocischemav1.Descriptor{}, fmt.Errorf("unsupported media type %q for image %q", baseImage.MediaType, relocatedImage)
+		return "", fmt.Errorf("unsupported media type %q for image %q", baseImage.MediaType, relocatedImage)
 	}
-	return ocischemav1.Descriptor{
-		Digest:    digested.Digest(),
-		MediaType: baseImage.MediaType,
-		Size:      int64(baseImage.Size),
-	}, nil
+	return mediaType, nil
 }

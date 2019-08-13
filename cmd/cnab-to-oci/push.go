@@ -66,6 +66,7 @@ func runPush(opts pushOptions) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(relocationMap)
 	d, err := remotes.Push(context.Background(), &b, relocationMap, ref, resolver, opts.allowFallbacks)
 	if err != nil {
 		return err

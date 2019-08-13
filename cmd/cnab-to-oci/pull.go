@@ -41,7 +41,8 @@ func runPull(opts pullOptions) error {
 		return err
 	}
 	//TODO: store relocation map
-	b, _, err := remotes.Pull(context.Background(), ref, createResolver(opts.insecureRegistries))
+	b, relocationMap, err := remotes.Pull(context.Background(), ref, createResolver(opts.insecureRegistries))
+	fmt.Println("Relocation map", relocationMap)
 	if err != nil {
 		return err
 	}

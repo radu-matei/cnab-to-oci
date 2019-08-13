@@ -72,6 +72,15 @@ func fixupImage(ctx context.Context, baseImage bundle.BaseImage, relocationMap b
 	if err != nil {
 		return notifyError(notifyEvent, err)
 	}
+	// Update the relocation map with the original image name and the digested reference of the image pushed inside the bundle repository
+	newRef, err := reference.WithDigest(fixupInfo.targetRepo, fixupInfo.resolvedDescriptor.Digest)
+	if err != nil {
+		return err
+	}
+	relocationMap[baseImage.Image] = newRef.String()
+	fmt.Printf("adding entry in relocation map: %v: %v", baseImage.Image, newRef.String())
+
+	// TODO: check if the relocation map should be updated here as well
 	if fixupInfo.sourceRef.Name() == fixupInfo.targetRepo.Name() {
 		notifyEvent(FixupEventTypeCopyImageEnd, "Nothing to do: image reference is already present in repository"+fixupInfo.targetRepo.String(), nil)
 		return nil
@@ -105,6 +114,7 @@ func fixupPlatforms(ctx context.Context, baseImage bundle.BaseImage, relocationM
 	if filter == nil ||
 		(fixupInfo.resolvedDescriptor.MediaType != ocischemav1.MediaTypeImageIndex && fixupInfo.resolvedDescriptor.MediaType != images.MediaTypeDockerSchema2ManifestList) {
 		// no platform filter if platform is empty, or if the descriptor is not an OCI Index / Docker Manifest list
+		fmt.Printf("returning because filter: %#v \nfixupinfo %#v\n", filter, fixupInfo)
 		return nil
 	}
 
@@ -141,12 +151,7 @@ func fixupPlatforms(ctx context.Context, baseImage bundle.BaseImage, relocationM
 	descriptor.Digest = d
 	descriptor.Size = int64(len(manifestBytes))
 	fixupInfo.resolvedDescriptor = descriptor
-	newRef, err := reference.WithDigest(fixupInfo.targetRepo, d)
-	if err != nil {
-		return err
-	}
-	// Update the relocation map with the original image name and the digested reference of the image pushed inside the bundle repository
-	relocationMap[baseImage.Image] = newRef.String()
+
 	return nil
 }
 

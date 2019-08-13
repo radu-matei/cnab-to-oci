@@ -118,7 +118,7 @@ func TestPush(t *testing.T) {
 	assert.NilError(t, err)
 
 	// push the bundle
-	_, err = Push(context.Background(), b, ref, resolver, true)
+	_, err = Push(context.Background(), b, bundle.ImageRelocationMap{}, ref, resolver, true)
 	assert.NilError(t, err)
 	assert.Equal(t, len(resolver.pushedReferences), 3)
 	assert.Equal(t, len(pusher.pushedDescriptors), 3)
@@ -152,7 +152,7 @@ func ExamplePush() {
 	}
 
 	// Push the bundle here
-	descriptor, err := Push(context.Background(), b, ref, resolver, true)
+	descriptor, err := Push(context.Background(), b, bundle.ImageRelocationMap{}, ref, resolver, true)
 	if err != nil {
 		panic(err)
 	}
